@@ -2,15 +2,13 @@
 
 Juego de dungeon-crawler por turnos hecho en C++ con ncurses. El punto de partida fue Adventure (Atari 2600, 1980): un jugador, habitaciones conectadas, enemigos que te persiguen y un objeto que necesitás para escapar. La idea era tomar esa base y llevarla un poco más cerca de lo que espera un jugador hoy — una pantalla de intro antes de entrar al juego, un minimapa que te orienta sin revelar todo, y un sistema de combate con algo de profundidad en vez de solo chocar contra los enemigos. Todo eso sin soltar la restricción original: memoria 100% estática, sin `new` ni `delete` en el game-loop, igual que cuando la RAM era un recurso escaso.
 
----
+
 
 ## Integrantes
 
-- *(Nombre completo integrante 1)*
-- *(Nombre completo integrante 2)*
-- *(Nombre completo integrante 3)*
+- Kanny Fernanda Gutiérrez Infante
 
----
+
 
 ## Desarrollos innovadores
 
@@ -22,7 +20,7 @@ Juego de dungeon-crawler por turnos hecho en C++ con ncurses. El punto de partid
 6. Renderizado ncurses con 18 pares de colores y barra de vida por enemigo
 7. Arquitectura de memoria estática total
 
----
+
 
 ## Compilación
 
@@ -55,7 +53,6 @@ cmake --build build
 .\build\dungeon.exe
 ```
 
----
 
 ## Estructura del proyecto
 
@@ -66,7 +63,7 @@ Makefile
 CMakeLists.txt
 ```
 
----
+
 
 ## Objetivo del juego
 
@@ -84,7 +81,7 @@ Empiezas en la sala 4 (el cruce central). Para ganar tenés que:
 2. Derrotar al Jefe Oscuro en sala 6, que al morir suelta la llave.
 3. Recoger la llave y llegar a la sala 2 para pisar la X de salida.
 
----
+
 
 ## Controles
 
@@ -96,7 +93,7 @@ Empiezas en la sala 4 (el cruce central). Para ganar tenés que:
 | M | Ver mapa completo (solo salas visitadas desbloqueadas) |
 | Q | Salir del juego |
 
----
+
 
 ## Tiles y entidades
 
@@ -115,7 +112,7 @@ Empiezas en la sala 4 (el cruce central). Para ganar tenés que:
 | `o` / `O` | Placa de presión inactiva / activada |
 | `#` | Puerta secreta (se abre al activar el grupo de placas) |
 
----
+
 
 ## Requisitos mínimos cumplidos
 
@@ -133,7 +130,7 @@ Empiezas en la sala 4 (el cruce central). Para ganar tenés que:
 | Make y CMake |  ambos incluidos |
 | Sin new/delete en el game-loop |  memoria 100% estática |
 
----
+
 
 ## Punteros en el código
 
@@ -173,7 +170,7 @@ Room* World::roomById(int id) {
 }
 ```
 
----
+
 
 ## Explicación de innovaciones
 
@@ -181,37 +178,37 @@ Room* World::roomById(int id) {
 
 En `room.h` hay dos estructuras separadas: `TriggerPlate`, que guarda `plateRoomId` y `gateRoomId` como campos distintos, y `PuzzleGroup`, que agrupa N placas con un contador `triggered` y un umbral `needed`. Las placas viven en `World::plates[16]`, no dentro de cada sala. Cuando el jugador pisa una placa, `checkPlate()` recorre ese array con aritmética de punteros, actualiza el grupo y llama a `world.roomById(gateRoomId)` para modificar el tile de la puerta aunque el jugador no esté en esa sala. Si la puerta es remota, el mensaje dice "Una puerta LEJANA se abre..." para que el jugador sepa que algo cambió en otro cuarto.
 
----
+
 
 ### 2. Jefe con drop de llave
 
 `Enemy` tiene el campo `bool dropKey`. En `game.cpp`, el bump attack chequea `target->hp <= 0` y luego `target->dropKey`; si es true, llama a `items.spawn(ItemType::Key, ...)` en la posición exacta donde murió el boss, creando el ítem en ese momento sobre el array estático. La llave no existe en el mapa hasta que el jefe muere — el combate es obligatorio para progresar.
 
----
+
 
 ### 3. Combate por colisión (bump attack)
 
 En `tryMove()`, antes de verificar si la casilla destino es walkable, se llama a `enemies.at(roomId, nx, ny)`. Si devuelve un puntero válido, se calcula el daño (1 base, 2 con espada) y se retorna sin mover al jugador. El movimiento y el ataque son la misma acción, igual al sistema estándar de los roguelikes.
 
----
+
 
 ### 4. Minimapa con niebla de guerra
 
 `visited[MAX_ROOMS]` es un array booleano en `Game` que se marca en `markVisited()` cada vez que el jugador entra a una nueva sala. El minimapa usa tres `COLOR_PAIR` distintos: sala actual (cyan inverso), visitada (verde), y no descubierta (negro sobre negro, invisible). Con M se ve la grilla 3×3 completa con `^v<>` indicando conexiones y `+` para la puerta cerrada.
 
----
+
 
 ### 5. Habitaciones temáticas
 
 `World::init()` construye cada sala con llamadas a `placePillar()`, `placeTrap()` y `setTile()` sobre el array estático `tiles[ROOM_H][ROOM_W]`. Cada sala tiene su propio bloque de inicialización. Los nombres se copian con `strncpy` a `room.name[40]` y se muestran en el borde superior del frame durante el juego.
 
----
+
 
 ### 6. Renderizado con 18 colores y barra de vida
 
 `Renderer::init()` registra los 18 pares con `init_pair()`. La barra de vida de cada enemigo se dibuja en `drawEntities()` solo si `e->hp < e->maxHp`, centrada encima del sprite. El Jefe usa `COLOR_PAIR(Color::Boss)` (texto negro sobre rojo) para diferenciarse del resto. Todas las llamadas a mvaddch/mvprintw pasan por wrappers que verifican límites del terminal antes de escribir, evitando crashes en PDCurses cuando la ventana es pequeña.
 
----
+
 
 ### 7. Memoria estática total
 
