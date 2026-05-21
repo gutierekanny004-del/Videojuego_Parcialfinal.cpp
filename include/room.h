@@ -1,20 +1,18 @@
 #pragma once
 #include "types.h"
 
-// ─── Pressure plate ───────────────────────────────────────────────────────────
-// A plate can live in a different room than the gate it controls.
-// groupId >= 0  → belongs to a PuzzleGroup (all plates in group must trigger)
-// groupId == -1 → standalone: directly opens gate on trigger
+// placa que puede estar en una sala distinta a la puerta que controla
+// groupId >= 0  -> pertenece a un PuzzleGroup (todas las placas deben pisarse)
+// groupId == -1 -> standalone, abre directamente su puerta al pisarse
 struct TriggerPlate {
     int  plateX     = 0,  plateY     = 0,  plateRoomId = -1;
     int  gateX      = 0,  gateY      = 0,  gateRoomId  = -1;
-    int  groupId    = -1;   // -1 = standalone
+    int  groupId    = -1;
     bool exists     = false;
     bool triggered  = false;
 };
 
-// ─── Puzzle group ─────────────────────────────────────────────────────────────
-// All 'needed' plates must be triggered before the gate opens.
+// todas las placas del grupo deben activarse antes de que abra la puerta
 struct PuzzleGroup {
     int  gateX      = 0,  gateY      = 0,  gateRoomId  = -1;
     int  needed     = 1;
@@ -23,7 +21,6 @@ struct PuzzleGroup {
     bool exists     = false;
 };
 
-// ─── Room ─────────────────────────────────────────────────────────────────────
 struct Room {
     int  id       = -1;
     bool locked   = false;
@@ -44,7 +41,6 @@ struct Room {
     void placeTrap  (int x, int y);
 };
 
-// ─── World ───────────────────────────────────────────────────────────────────
 struct World {
     static constexpr int COLS       = 3;
     static constexpr int ROWS       = 3;
@@ -62,13 +58,13 @@ struct World {
     Room*       roomById(int id);
     const Room* roomById(int id) const;
 
-    // Register a standalone plate (single plate → single gate in any room)
+    // placa standalone: una placa -> una puerta en cualquier sala
     TriggerPlate* addPlate(int pRoom, int px, int py,
                             int gRoom, int gx, int gy);
 
-    // Register a group; returns groupId
+    // crea un grupo; devuelve el groupId
     int addGroup(int gRoom, int gx, int gy, int needed);
 
-    // Register a plate that is part of a group
+    // agrega una placa al grupo indicado
     TriggerPlate* addGroupPlate(int groupId, int pRoom, int px, int py);
 };

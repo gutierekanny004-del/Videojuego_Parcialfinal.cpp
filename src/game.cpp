@@ -10,8 +10,6 @@
 #include <cstdarg>
 #include <cstring>
 
-// ─── init ────────────────────────────────────────────────────────────────────
-
 void Game::init() {
     renderer.init();
     world.init();
@@ -21,53 +19,37 @@ void Game::init() {
     player.y      = ROOM_H / 2;
     markVisited();
 
-    // ── Items ─────────────────────────────────────────────────────────────────
-    // Sword    : Room 0 vault center — rewards thorough exploration
     items.spawn(ItemType::Sword,  0, 14, 6);
-    // Potion 1 : Room 7 north half — guarded by first Chaser
-    items.spawn(ItemType::Potion, 7, 5, 4);
-    // Potion 2 : Room 3 left side (behind Puzzle B gate)
-    items.spawn(ItemType::Potion, 3, 4,  7);
-    // Potion 3 : Room 8 left pocket (behind Puzzle C gate)
-    items.spawn(ItemType::Potion, 8, 3,  6);
+    items.spawn(ItemType::Potion, 7,  5, 4);
+    items.spawn(ItemType::Potion, 3,  4, 7);
+    items.spawn(ItemType::Potion, 8,  3, 6);
 
-    // ── Enemies ───────────────────────────────────────────────────────────────
-    // Room 1 — two Cazadores, one each side of the gauntlet
-    enemies.spawn(EnemyType::Chaser, 1, 6,  6);
-    enemies.spawn(EnemyType::Chaser, 1, 22, 6);
+    enemies.spawn(EnemyType::Chaser, 1,  6,  6);
+    enemies.spawn(EnemyType::Chaser, 1, 22,  6);
 
-    // Room 3 — Centinela patrols the right maze
     Enemy* const p3 = enemies.spawn(EnemyType::Patrol, 3, 14, 6);
     enemies.setupPatrolWaypoints(p3, 10,2, 24,2, 24,11, 10,11);
 
-    // Room 5 — Cazador guards the cross-room plate
     enemies.spawn(EnemyType::Chaser, 5, 14, 8);
 
-    // Room 7 — two Cazadores guard the south plate (Puzzle A)
     enemies.spawn(EnemyType::Chaser, 7, 20, 10);
     enemies.spawn(EnemyType::Chaser, 7, 12,  9);
 
-    // Room 8 — heavy Patrol in the concentric trap rings
     Enemy* const p8 = enemies.spawn(EnemyType::Patrol, 8, 14, 6);
     enemies.setupPatrolWaypoints(p8, 8,4, 20,4, 20,9, 8,9);
     Enemy* const p8b = enemies.spawn(EnemyType::Patrol, 8, 14, 7);
     enemies.setupPatrolWaypoints(p8b, 9,5, 19,5, 19,8, 9,8);
 
-    // Room 6 — JEFE OSCURO guards the key inside the sealed arena
     Enemy* const boss = enemies.spawn(EnemyType::Boss, 6, 5, 7);
     boss->dropKey = true;
 
     setMessage("Dos placas abren la puerta del Jefe. Explora!");
 }
 
-// ─── markVisited ─────────────────────────────────────────────────────────────
-
 void Game::markVisited() {
     if (player.roomId >= 0 && player.roomId < MAX_ROOMS)
         visited[player.roomId] = true;
 }
-
-// ─── setMessage ──────────────────────────────────────────────────────────────
 
 void Game::setMessage(const char* fmt, ...) {
     va_list args;
@@ -75,8 +57,6 @@ void Game::setMessage(const char* fmt, ...) {
     vsnprintf(message, sizeof(message), fmt, args);
     va_end(args);
 }
-
-// ─── handleInput ─────────────────────────────────────────────────────────────
 
 void Game::handleInput(int key) {
     switch (key) {
@@ -91,8 +71,6 @@ void Game::handleInput(int key) {
     }
 }
 
-// ─── tryMove ─────────────────────────────────────────────────────────────────
-
 void Game::tryMove(int dx, int dy) {
     const int nx = player.x + dx;
     const int ny = player.y + dy;
@@ -100,7 +78,7 @@ void Game::tryMove(int dx, int dy) {
     Room* const room = world.roomById(player.roomId);
     if (!room) return;
 
-    // ── Bump-attack ───────────────────────────────────────────────────────────
+    // si hay un enemigo en la casilla destino, atacar en vez de moverse
     {
         Enemy* const target = enemies.at(player.roomId, nx, ny);
         if (target) {
@@ -124,7 +102,7 @@ void Game::tryMove(int dx, int dy) {
         }
     }
 
-    // ── Locked door ───────────────────────────────────────────────────────────
+    // puerta cerrada con llave
     if (nx >= 0 && nx < ROOM_W && ny >= 0 && ny < ROOM_H) {
         if (room->tiles[ny][nx] == static_cast<char>(Tile::Locked)) {
             if (player.hasKey()) {
@@ -133,8 +111,7 @@ void Game::tryMove(int dx, int dy) {
                 Room* const r2 = world.roomById(2);
                 if (r2) {
                     r2->locked = false;
-                    r2->tiles[ROOM_H-1][ROOM_W/2] =
-                        static_cast<char>(Tile::Floor);
+                    r2->tiles[ROOM_H-1][ROOM_W/2] = static_cast<char>(Tile::Floor);
                 }
                 setMessage("Puerta desbloqueada con la llave!");
             } else {
@@ -149,15 +126,12 @@ void Game::tryMove(int dx, int dy) {
     player.x = nx;
     player.y = ny;
 
-    checkRoomTransition();
-    checkTrap();
-    checkPlate();
+    checkRoomTransition(room);
+    checkTrap(room);
+    checkPlate(room);
 }
 
-// ─── checkTrap ───────────────────────────────────────────────────────────────
-
-void Game::checkTrap() {
-    Room* const room = world.roomById(player.roomId);
+void Game::checkTrap(Room* const room) {
     if (!room) return;
     if (room->tiles[player.y][player.x] == static_cast<char>(Tile::Trap)) {
         player.takeDamage(1);
@@ -165,86 +139,44 @@ void Game::checkTrap() {
     }
 }
 
-// ─── checkPlate ──────────────────────────────────────────────────────────────
-
-void Game::checkPlate() {
-    Room* const room = world.roomById(player.roomId);
+void Game::checkPlate(Room* const room) {
     if (!room) return;
     if (room->tiles[player.y][player.x] != static_cast<char>(Tile::Plate))
         return;
 
     TriggerPlate* const pEnd = world.plates + world.plateCount;
     for (TriggerPlate* pl = world.plates; pl != pEnd; ++pl) {
-        if (!pl->exists || pl->triggered)        continue;
-        if (pl->plateRoomId != player.roomId)    continue;
-        if (pl->plateX != player.x ||
-            pl->plateY != player.y)              continue;
+        if (!pl->exists || pl->triggered)     continue;
+        if (pl->plateRoomId != player.roomId) continue;
+        if (pl->plateX != player.x || pl->plateY != player.y) continue;
 
         pl->triggered = true;
-        // Visually activate the plate tile
-        Room* const pr = world.roomById(pl->plateRoomId);
-        if (pr) pr->tiles[pl->plateY][pl->plateX] =
-                    static_cast<char>(Tile::PlateOn);
+        room->tiles[pl->plateY][pl->plateX] = static_cast<char>(Tile::PlateOn);
 
         if (pl->groupId >= 0) {
-            // ── Multi-plate group ─────────────────────────────────────────────
             PuzzleGroup* const grp = &world.groups[pl->groupId];
             grp->triggered++;
             if (grp->triggered >= grp->needed && !grp->opened) {
                 grp->opened = true;
                 Room* const gr = world.roomById(grp->gateRoomId);
-                if (gr) gr->tiles[grp->gateY][grp->gateX] =
-                            static_cast<char>(Tile::Floor);
+                if (gr) gr->tiles[grp->gateY][grp->gateX] = static_cast<char>(Tile::Floor);
                 if (grp->gateRoomId == player.roomId)
                     setMessage("*BOOM* La puerta secreta se abre!");
                 else
                     setMessage("*BOOM* Una puerta LEJANA se abre...");
             } else if (!grp->opened) {
-                const int remaining = grp->needed - grp->triggered;
-                setMessage("*CLIC* Faltan %d placa(s) mas!", remaining);
+                setMessage("*CLIC* Faltan %d placa(s) mas!", grp->needed - grp->triggered);
             }
         } else {
-            // ── Standalone plate ──────────────────────────────────────────────
             Room* const gr = world.roomById(pl->gateRoomId);
-            if (gr) gr->tiles[pl->gateY][pl->gateX] =
-                        static_cast<char>(Tile::Floor);
+            if (gr) gr->tiles[pl->gateY][pl->gateX] = static_cast<char>(Tile::Floor);
             setMessage("*CLIC* Puerta secreta abierta!");
         }
         break;
     }
 }
 
-// ─── tryPickupOrDrop ─────────────────────────────────────────────────────────
-
-void Game::tryPickupOrDrop() {
-    if (player.hasItem()) {
-        player.dropItem(player.roomId);
-        setMessage("Item soltado.");
-        return;
-    }
-    Item* const iEnd = items.items + items.count;
-    for (Item* it = items.items; it != iEnd; ++it) {
-        if (!it->active || it->roomId != player.roomId) continue;
-        if (it->x != player.x  || it->y != player.y)   continue;
-        if (player.tryPickup(it)) {
-            if (it->type == ItemType::Potion) {
-                player.heal(2);
-                player.heldItem->active = false;
-                player.heldItem = nullptr;
-                setMessage("Pocion! +2 HP (%d/%d)", player.hp, player.maxHp);
-            } else {
-                setMessage("Recogiste: %s", it->name());
-            }
-            return;
-        }
-    }
-    setMessage("No hay nada aqui.");
-}
-
-// ─── checkRoomTransition ─────────────────────────────────────────────────────
-
-void Game::checkRoomTransition() {
-    Room* const room = world.roomById(player.roomId);
+void Game::checkRoomTransition(Room* const room) {
     if (!room) return;
 
     bool moved = false;
@@ -264,7 +196,26 @@ void Game::checkRoomTransition() {
     }
 }
 
-// ─── checkWinLose ────────────────────────────────────────────────────────────
+void Game::tryPickupOrDrop() {
+    if (player.hasItem()) {
+        player.dropItem(player.roomId);
+        setMessage("Item soltado.");
+        return;
+    }
+    Item* const it = items.at(player.roomId, player.x, player.y);
+    if (it && player.tryPickup(it)) {
+        if (it->type == ItemType::Potion) {
+            player.heal(2);
+            player.heldItem->active = false;
+            player.heldItem = nullptr;
+            setMessage("Pocion! +2 HP (%d/%d)", player.hp, player.maxHp);
+        } else {
+            setMessage("Recogiste: %s", it->name());
+        }
+        return;
+    }
+    setMessage("No hay nada aqui.");
+}
 
 void Game::checkWinLose() {
     if (!player.isAlive()) { state = GameState::Lost; return; }
@@ -273,8 +224,6 @@ void Game::checkWinLose() {
         room->tiles[player.y][player.x] == static_cast<char>(Tile::Exit))
         state = GameState::Won;
 }
-
-// ─── update ──────────────────────────────────────────────────────────────────
 
 void Game::update() {
     const Room* const room = world.roomById(player.roomId);
@@ -285,27 +234,25 @@ void Game::update() {
         if (e->update(player.x, player.y, player.roomId, room->tiles)) {
             const int dmg = (e->type == EnemyType::Boss) ? 2 : 1;
             player.takeDamage(dmg);
-            setMessage("%s te golpea! HP:%d/%d",
-                       e->name(), player.hp, player.maxHp);
+            setMessage("%s te golpea! HP:%d/%d", e->name(), player.hp, player.maxHp);
         }
     }
 }
 
-// ─── run ─────────────────────────────────────────────────────────────────────
-
 void Game::run() {
     while (state == GameState::Playing) {
         if (showMap) {
-            renderer.drawFullMap(world, player, visited);
-            if (getch() == 'm' || getch() == 'M') showMap = false;
-            showMap = false;
+            renderer.drawFullMap(&world, &player, visited);
+            const int k = getch();
+            if (k == 'm' || k == 'M') showMap = false;
             continue;
         }
-        renderer.draw(world, player, enemies, items, message, visited);
+        renderer.draw(&world, &player, &enemies, &items, message, visited);
         handleInput(getch());
         if (state == GameState::Playing) { update(); checkWinLose(); }
         ++tickCount;
     }
-    renderer.drawGameOver(state == GameState::Won);
+    renderer.drawGameOver(state == GameState::Won,
+                          tickCount, player.hp, player.maxHp, visited);
     renderer.shutdown();
 }

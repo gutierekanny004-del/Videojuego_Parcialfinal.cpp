@@ -9,7 +9,7 @@ struct Enemy {
     int       y         = 0;
     int       roomId    = 0;
     bool      active    = true;
-    bool      dropKey   = false;   // drops key on death
+    bool      dropKey   = false;   // Suelta la llave y muere
 
     int       hp        = 2;
     int       maxHp     = 2;
@@ -25,7 +25,7 @@ struct Enemy {
     char        glyph() const;
     const char* name()  const;
 
-    // Returns true if it collided with (px,py) this tick
+    // Devuelve true si el enemigo muere
     bool update(int px, int py, int playerRoom,
                 const char roomTiles[][ROOM_W]);
 private:
@@ -45,6 +45,6 @@ struct EnemyPool {
                int x0, int y0, int x1, int y1,
                int x2, int y2, int x3, int y3);
 
-    // Pointer to first active enemy in roomId matching (x,y), or nullptr
+    // Puntero al enemigo en la posicion (x,y) de la sala roomId
     Enemy* at(int roomId, int x, int y);
 };

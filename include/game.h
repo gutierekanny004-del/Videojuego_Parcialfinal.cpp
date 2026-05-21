@@ -28,10 +28,10 @@ private:
     void update();
     void tryMove(int dx, int dy);
     void tryPickupOrDrop();
-    void checkRoomTransition();
+    void checkRoomTransition(Room* room);
     void checkWinLose();
-    void checkTrap();
-    void checkPlate();
+    void checkTrap(Room* room);
+    void checkPlate(Room* room);
     void setMessage(const char* fmt, ...);
     void markVisited();
 };

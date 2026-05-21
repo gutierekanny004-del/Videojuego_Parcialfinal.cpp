@@ -5,6 +5,7 @@ struct World;
 struct Player;
 struct EnemyPool;
 struct ItemPool;
+struct Room;
 
 struct Renderer {
     int termRows = 0;
@@ -21,19 +22,37 @@ struct Renderer {
     void init();
     void shutdown();
 
-    void draw(const World& world, const Player& player,
-              const EnemyPool& enemies, const ItemPool& items,
-              const char* message,
-              const bool visited[MAX_ROOMS]);
+    void draw(const World*    world,
+              const Player*   player,
+              const EnemyPool* enemies,
+              const ItemPool*  items,
+              const char*      message,
+              const bool       visited[MAX_ROOMS]);
 
-    void drawFullMap(const World& world, const Player& player,
-                     const bool visited[MAX_ROOMS]);
+    void drawFullMap(const World*  world,
+                     const Player* player,
+                     const bool    visited[MAX_ROOMS]);
 
-    void drawGameOver(bool won);
+    void drawGameOver(bool won,
+                      int  tickCount,
+                      int  playerHp,
+                      int  playerMaxHp,
+                      const bool visited[MAX_ROOMS]);
 
 private:
-    void drawRoom    (const World& w, int roomId);
-    void drawEntities(const Player& p, const EnemyPool& e, const ItemPool& items, int roomId);
-    void drawUI      (const Player& p, const EnemyPool& ep, const char* message, int roomId);
-    void drawMiniMap (const World& w, const Player& p, const bool visited[MAX_ROOMS]);
+    void safe_mvaddch (int y, int x, chtype ch);
+    void safe_mvprintw(int y, int x, const char* fmt, ...);
+
+    void drawRoom    (const Room*     room);
+    void drawEntities(const Player*   p,
+                      const EnemyPool* ep,
+                      const ItemPool*  items,
+                      int              roomId);
+    void drawUI      (const Player*   p,
+                      const EnemyPool* ep,
+                      const char*      message,
+                      int              roomId);
+    void drawMiniMap (const World*    w,
+                      const Player*   p,
+                      const bool      visited[MAX_ROOMS]);
 };

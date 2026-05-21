@@ -1,13 +1,11 @@
 #pragma once
 
-// ─── Dimensions ──────────────────────────────────────────────────────────────
 constexpr int ROOM_W      = 28;
 constexpr int ROOM_H      = 14;
 constexpr int MAX_ENEMIES = 16;
 constexpr int MAX_ITEMS   = 16;
 constexpr int MAX_ROOMS   = 9;
 
-// ─── Tile types ──────────────────────────────────────────────────────────────
 enum class Tile : char {
     Floor   = '.',
     Wall    = '#',
@@ -24,13 +22,10 @@ enum class Tile : char {
     Gate    = '!'
 };
 
-// ─── Cardinal directions ─────────────────────────────────────────────────────
 enum class Dir { None, North, South, East, West };
 
-// ─── Game states ─────────────────────────────────────────────────────────────
 enum class GameState { Playing, Won, Lost };
 
-// ─── Color pair IDs (ncurses) ────────────────────────────────────────────────
 namespace Color {
     constexpr int Wall      = 1;
     constexpr int Floor     = 2;

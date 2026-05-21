@@ -21,11 +21,19 @@ const char* Item::name() const {
 
 Item* ItemPool::spawn(ItemType t, int roomId, int x, int y) {
     if (count >= CAP) return nullptr;
-    Item* it  = &items[count++];
-    it->type  = t;
-    it->roomId= roomId;
-    it->x     = x;
-    it->y     = y;
-    it->active= true;
+    Item* const it = &items[count++];
+    it->type   = t;
+    it->roomId = roomId;
+    it->x      = x;
+    it->y      = y;
+    it->active = true;
     return it;
+}
+
+Item* ItemPool::at(int roomId, int x, int y) {
+    Item* const end = items + count;
+    for (Item* it = items; it != end; ++it)
+        if (it->active && it->roomId == roomId && it->x == x && it->y == y)
+            return it;
+    return nullptr;
 }

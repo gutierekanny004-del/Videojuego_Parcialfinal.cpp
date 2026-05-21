@@ -1,8 +1,6 @@
 #include "enemy.h"
 #include <cmath>
 
-// ─── glyph / name ─────────────────────────────────────────────────────────────
-
 char Enemy::glyph() const {
     switch (type) {
         case EnemyType::Chaser: return 'C';
@@ -21,17 +19,14 @@ const char* Enemy::name() const {
     return "???";
 }
 
-// ─── walkable (inline helper) ────────────────────────────────────────────────
-
+// tiles que un enemigo puede pisar (son inmunes a trampas)
 static inline bool walkable(char t) {
     return t == static_cast<char>(Tile::Floor)
         || t == static_cast<char>(Tile::Exit)
-        || t == static_cast<char>(Tile::Trap)     // enemies immune to traps
+        || t == static_cast<char>(Tile::Trap)
         || t == static_cast<char>(Tile::Plate)
         || t == static_cast<char>(Tile::PlateOn);
 }
-
-// ─── tryMove ─────────────────────────────────────────────────────────────────
 
 bool Enemy::tryMove(int nx, int ny, const char tiles[][ROOM_W]) {
     if (nx < 0 || nx >= ROOM_W || ny < 0 || ny >= ROOM_H) return false;
@@ -40,8 +35,6 @@ bool Enemy::tryMove(int nx, int ny, const char tiles[][ROOM_W]) {
     y = ny;
     return true;
 }
-
-// ─── movement strategies ─────────────────────────────────────────────────────
 
 void Enemy::moveChaser(int px, int py, const char tiles[][ROOM_W]) {
     const int dx = px - x;
@@ -56,7 +49,6 @@ void Enemy::moveChaser(int px, int py, const char tiles[][ROOM_W]) {
 }
 
 void Enemy::movePatrol(int px, int py, const char tiles[][ROOM_W]) {
-    // Aggro range: 5 tiles
     if (std::abs(px - x) + std::abs(py - y) <= 5) {
         moveChaser(px, py, tiles);
         return;
@@ -82,11 +74,8 @@ void Enemy::movePatrol(int px, int py, const char tiles[][ROOM_W]) {
 }
 
 void Enemy::moveBoss(int px, int py, const char tiles[][ROOM_W]) {
-    // Boss always chases but is slow (handled by moveDelay)
     moveChaser(px, py, tiles);
 }
-
-// ─── update ──────────────────────────────────────────────────────────────────
 
 bool Enemy::update(int px, int py, int playerRoom, const char tiles[][ROOM_W]) {
     if (!active || roomId != playerRoom) return false;
@@ -100,8 +89,6 @@ bool Enemy::update(int px, int py, int playerRoom, const char tiles[][ROOM_W]) {
     }
     return (x == px && y == py);
 }
-
-// ─── EnemyPool ───────────────────────────────────────────────────────────────
 
 Enemy* EnemyPool::spawn(EnemyType t, int roomId, int x, int y) {
     if (count >= CAP) return nullptr;
@@ -118,17 +105,11 @@ Enemy* EnemyPool::spawn(EnemyType t, int roomId, int x, int y) {
 
     switch (t) {
         case EnemyType::Chaser:
-            e->hp = e->maxHp = 2;
-            e->moveDelay = 2;
-            break;
+            e->hp = e->maxHp = 2; e->moveDelay = 2; break;
         case EnemyType::Patrol:
-            e->hp = e->maxHp = 3;
-            e->moveDelay = 3;
-            break;
+            e->hp = e->maxHp = 3; e->moveDelay = 3; break;
         case EnemyType::Boss:
-            e->hp = e->maxHp = 6;
-            e->moveDelay = 4;   // slower but hits hard
-            break;
+            e->hp = e->maxHp = 6; e->moveDelay = 4; break;
     }
     return e;
 }

@@ -12,8 +12,7 @@
 
 #include <cstring>
 #include <cstdio>
-
-// ─── init / shutdown ─────────────────────────────────────────────────────────
+#include <cstdarg>
 
 void Renderer::init() {
     if (!stdscr) initscr();
@@ -50,10 +49,25 @@ void Renderer::init() {
 
 void Renderer::shutdown() { endwin(); }
 
-// ─── drawRoom ────────────────────────────────────────────────────────────────
+// wrappers que no dibujan si la coordenada cae fuera del terminal
+void Renderer::safe_mvaddch(int y, int x, chtype ch) {
+    if (x >= 0 && x < termCols && y >= 0 && y < termRows)
+        mvaddch(y, x, ch);
+}
 
-void Renderer::drawRoom(const World& w, int roomId) {
-    const Room* const room = w.roomById(roomId);
+void Renderer::safe_mvprintw(int y, int x, const char* fmt, ...) {
+    if (y < 0 || y >= termRows || x < 0 || x >= termCols) return;
+    va_list args;
+    va_start(args, fmt);
+    char buf[512];
+    vsnprintf(buf, sizeof(buf), fmt, args);
+    va_end(args);
+    const int maxLen = termCols - x;
+    for (int i = 0; buf[i] != '\0' && i < maxLen; ++i)
+        mvaddch(y, x + i, static_cast<unsigned char>(buf[i]));
+}
+
+void Renderer::drawRoom(const Room* const room) {
     if (!room) return;
 
     for (int y = 0; y < ROOM_H; ++y) {
@@ -75,87 +89,87 @@ void Renderer::drawRoom(const World& w, int roomId) {
             else                                             { cp = Color::FloorDark; ch = '.';         attr = A_DIM;  }
 
             attron(COLOR_PAIR(cp) | attr);
-            mvaddch(MAP_ORIG_Y + y, MAP_ORIG_X + x, ch);
+            safe_mvaddch(MAP_ORIG_Y + y, MAP_ORIG_X + x, ch);
             attroff(COLOR_PAIR(cp) | attr);
         }
     }
 
-    // Border
     attron(COLOR_PAIR(Color::UI));
     for (int x = 0; x <= ROOM_W + 1; ++x) {
-        mvaddch(MAP_ORIG_Y - 1,      MAP_ORIG_X - 1 + x, ACS_HLINE);
-        mvaddch(MAP_ORIG_Y + ROOM_H, MAP_ORIG_X - 1 + x, ACS_HLINE);
+        safe_mvaddch(MAP_ORIG_Y - 1,      MAP_ORIG_X - 1 + x, ACS_HLINE);
+        safe_mvaddch(MAP_ORIG_Y + ROOM_H, MAP_ORIG_X - 1 + x, ACS_HLINE);
     }
     for (int y = 0; y <= ROOM_H + 1; ++y) {
-        mvaddch(MAP_ORIG_Y - 1 + y, MAP_ORIG_X - 1,      ACS_VLINE);
-        mvaddch(MAP_ORIG_Y - 1 + y, MAP_ORIG_X + ROOM_W, ACS_VLINE);
+        safe_mvaddch(MAP_ORIG_Y - 1 + y, MAP_ORIG_X - 1,      ACS_VLINE);
+        safe_mvaddch(MAP_ORIG_Y - 1 + y, MAP_ORIG_X + ROOM_W, ACS_VLINE);
     }
-    mvaddch(MAP_ORIG_Y - 1,      MAP_ORIG_X - 1,      ACS_ULCORNER);
-    mvaddch(MAP_ORIG_Y - 1,      MAP_ORIG_X + ROOM_W, ACS_URCORNER);
-    mvaddch(MAP_ORIG_Y + ROOM_H, MAP_ORIG_X - 1,      ACS_LLCORNER);
-    mvaddch(MAP_ORIG_Y + ROOM_H, MAP_ORIG_X + ROOM_W, ACS_LRCORNER);
+    safe_mvaddch(MAP_ORIG_Y - 1,      MAP_ORIG_X - 1,      ACS_ULCORNER);
+    safe_mvaddch(MAP_ORIG_Y - 1,      MAP_ORIG_X + ROOM_W, ACS_URCORNER);
+    safe_mvaddch(MAP_ORIG_Y + ROOM_H, MAP_ORIG_X - 1,      ACS_LLCORNER);
+    safe_mvaddch(MAP_ORIG_Y + ROOM_H, MAP_ORIG_X + ROOM_W, ACS_LRCORNER);
     attron(A_BOLD);
-    mvprintw(MAP_ORIG_Y - 1, MAP_ORIG_X + 1, " %s ", room->name);
+    safe_mvprintw(MAP_ORIG_Y - 1, MAP_ORIG_X + 1, " %s ", room->name);
     attroff(A_BOLD | COLOR_PAIR(Color::UI));
 }
 
-// ─── drawEntities ────────────────────────────────────────────────────────────
-
-void Renderer::drawEntities(const Player& p, const EnemyPool& ep,
-                             const ItemPool& ip, int roomId)
+void Renderer::drawEntities(const Player*    const p,
+                             const EnemyPool* const ep,
+                             const ItemPool*  const ip,
+                             int roomId)
 {
-    // Items
-    const Item* const iend = ip.items + ip.count;
-    for (const Item* it = ip.items; it != iend; ++it) {
+    if (!p || !ep || !ip) return;
+
+    const Item* const iend = ip->items + ip->count;
+    for (const Item* it = ip->items; it != iend; ++it) {
         if (!it->active || it->roomId != roomId) continue;
         attron(COLOR_PAIR(Color::Item) | A_BOLD);
-        mvaddch(MAP_ORIG_Y + it->y, MAP_ORIG_X + it->x, it->glyph());
+        safe_mvaddch(MAP_ORIG_Y + it->y, MAP_ORIG_X + it->x, it->glyph());
         attroff(COLOR_PAIR(Color::Item) | A_BOLD);
     }
 
-    // Enemies
-    const Enemy* const eend = ep.enemies + ep.count;
-    for (const Enemy* e = ep.enemies; e != eend; ++e) {
+    const Enemy* const eend = ep->enemies + ep->count;
+    for (const Enemy* e = ep->enemies; e != eend; ++e) {
         if (!e->active || e->roomId != roomId) continue;
 
         const int cp = (e->type == EnemyType::Boss)   ? Color::Boss
                      : (e->type == EnemyType::Patrol) ? Color::Enemy2
-                                                       : Color::Enemy1;
+                                                      : Color::Enemy1;
         attron(COLOR_PAIR(cp) | A_BOLD);
-        mvaddch(MAP_ORIG_Y + e->y, MAP_ORIG_X + e->x, e->glyph());
+        safe_mvaddch(MAP_ORIG_Y + e->y, MAP_ORIG_X + e->x, e->glyph());
         attroff(COLOR_PAIR(cp) | A_BOLD);
 
-        // HP pips above enemy (only if damaged)
+        // barra de vida encima del sprite, solo si ya recibio daño
         if (e->hp < e->maxHp) {
-            const int ey = MAP_ORIG_Y + e->y - 1;
-            const int ex = MAP_ORIG_X + e->x - e->maxHp / 2;
+            const int ey  = MAP_ORIG_Y + e->y - 1;
+            const int exs = MAP_ORIG_X + e->x - e->maxHp / 2;
             if (ey >= MAP_ORIG_Y) {
                 for (int h = 0; h < e->maxHp; ++h) {
+                    const int bx = exs + h;
+                    if (bx < 0 || bx >= termCols) continue;
                     const int cpH = (h < e->hp) ? Color::Enemy1 : Color::UI;
                     attron(COLOR_PAIR(cpH));
-                    mvaddch(ey, ex + h, (h < e->hp) ? '*' : '-');
+                    safe_mvaddch(ey, bx, (h < e->hp) ? '*' : '-');
                     attroff(COLOR_PAIR(cpH));
                 }
             }
         }
     }
 
-    // Player
     attron(COLOR_PAIR(Color::Player) | A_BOLD);
-    mvaddch(MAP_ORIG_Y + p.y, MAP_ORIG_X + p.x, '@');
+    safe_mvaddch(MAP_ORIG_Y + p->y, MAP_ORIG_X + p->x, '@');
     attroff(COLOR_PAIR(Color::Player) | A_BOLD);
 }
 
-// ─── drawMiniMap ─────────────────────────────────────────────────────────────
-
-void Renderer::drawMiniMap(const World& w, const Player& p,
+void Renderer::drawMiniMap(const World*  const w,
+                            const Player* const p,
                             const bool visited[MAX_ROOMS])
 {
+    if (!w || !p) return;
     const int baseX = MAP_ORIG_X;
     const int baseY = MAP_ORIG_Y + ROOM_H + 2;
 
     attron(COLOR_PAIR(Color::UI) | A_BOLD);
-    mvprintw(baseY - 1, baseX, "[ MAPA ] M = mapa completo");
+    safe_mvprintw(baseY - 1, baseX, "[ MAPA ] M = mapa completo");
     attroff(A_BOLD | COLOR_PAIR(Color::UI));
 
     for (int row = 0; row < 3; ++row) {
@@ -163,172 +177,97 @@ void Renderer::drawMiniMap(const World& w, const Player& p,
             const int roomId = row * 3 + col;
             const int sx = baseX + col * MINI_CELL_W;
             const int sy = baseY + row * MINI_CELL_H;
-            int cp;
+            int  cp;
             char lbl;
-            if      (roomId == p.roomId)   { cp = Color::MiniCur;   lbl = '@'; }
-            else if (visited[roomId])      { cp = Color::MiniVisit; lbl = static_cast<char>('0'+roomId); }
-            else                           { cp = Color::MiniHide;  lbl = ' '; }
+            if      (roomId == p->roomId)   { cp = Color::MiniCur;   lbl = '@'; }
+            else if (visited[roomId])        { cp = Color::MiniVisit; lbl = static_cast<char>('0' + roomId); }
+            else                             { cp = Color::MiniHide;  lbl = ' '; }
 
             for (int dy = 0; dy < MINI_CELL_H; ++dy) {
                 attron(COLOR_PAIR(cp));
                 for (int dx = 0; dx < MINI_CELL_W - 1; ++dx) {
-                    char ch = (visited[roomId] || roomId == p.roomId) ? '.' : ' ';
+                    char ch = (visited[roomId] || roomId == p->roomId) ? '.' : ' ';
                     if (dy == 1 && dx == 1) ch = lbl;
-                    mvaddch(sy + dy, sx + dx, ch);
+                    safe_mvaddch(sy + dy, sx + dx, ch);
                 }
                 attroff(COLOR_PAIR(cp));
                 attron(COLOR_PAIR(Color::UI));
-                mvaddch(sy + dy, sx + MINI_CELL_W - 1, ACS_VLINE);
+                safe_mvaddch(sy + dy, sx + MINI_CELL_W - 1, ACS_VLINE);
                 attroff(COLOR_PAIR(Color::UI));
             }
             attron(COLOR_PAIR(Color::UI));
             for (int dx = 0; dx < MINI_CELL_W - 1; ++dx)
-                mvaddch(sy + MINI_CELL_H, sx + dx, ACS_HLINE);
-            mvaddch(sy + MINI_CELL_H, sx + MINI_CELL_W - 1, ACS_PLUS);
+                safe_mvaddch(sy + MINI_CELL_H, sx + dx, ACS_HLINE);
+            safe_mvaddch(sy + MINI_CELL_H, sx + MINI_CELL_W - 1, ACS_PLUS);
             attroff(COLOR_PAIR(Color::UI));
         }
     }
 }
 
-// ─── drawFullMap ─────────────────────────────────────────────────────────────
-
-void Renderer::drawFullMap(const World& world, const Player& player,
-                            const bool visited[MAX_ROOMS])
+void Renderer::drawUI(const Player*    const p,
+                       const EnemyPool* const ep,
+                       const char* message,
+                       int roomId)
 {
-    clear();
-    constexpr int CW = 10, CH = 4;
-    const int startX = (termCols - CW * 3 - 1) / 2;
-    const int startY = (termRows - (CH * 3 + 1)) / 2;
-
-    attron(COLOR_PAIR(Color::Item) | A_BOLD);
-    mvprintw(startY - 2, startX, "=== MAPA DEL DUNGEON (M para cerrar) ===");
-    attroff(A_BOLD | COLOR_PAIR(Color::Item));
-
-    for (int row = 0; row < 3; ++row) {
-        for (int col = 0; col < 3; ++col) {
-            const int roomId = row * 3 + col;
-            const int sx = startX + col * CW;
-            const int sy = startY + row * CH;
-            const int cp = (roomId == player.roomId) ? Color::MiniCur
-                         : visited[roomId]           ? Color::MiniVisit
-                                                     : Color::MiniHide;
-            const Room* const room = world.roomById(roomId);
-            const bool vis = visited[roomId] || roomId == player.roomId;
-
-            for (int dy = 0; dy < CH; ++dy) {
-                attron(COLOR_PAIR(cp));
-                for (int dx = 0; dx < CW - 1; ++dx) {
-                    char ch = ' ';
-                    if (vis) {
-                        if (dy == 0 || dy == CH-1 || dx == 0 || dx == CW-2) ch = '.';
-                        if (dy == CH/2) {
-                            if      (dx == CW/2 - 1 && roomId == player.roomId) ch = '@';
-                            else if (dx == CW/2 - 1 && room && room->hasExit)   ch = 'X';
-                            else if (dx == CW/2 - 1 && room && room->locked)    ch = '+';
-                            if (dx == CW/2) ch = static_cast<char>('0' + roomId);
-                        }
-                    } else {
-                        ch = (dy % 2 == 0 && dx % 2 == 0) ? '?' : ' ';
-                    }
-                    mvaddch(sy + dy, sx + dx, ch);
-                }
-                attroff(COLOR_PAIR(cp));
-                attron(COLOR_PAIR(Color::UI));
-                mvaddch(sy + dy, sx + CW - 1, ACS_VLINE);
-                attroff(COLOR_PAIR(Color::UI));
-            }
-            attron(COLOR_PAIR(Color::UI));
-            for (int dx = 0; dx < CW - 1; ++dx)
-                mvaddch(sy + CH, sx + dx, ACS_HLINE);
-            mvaddch(sy + CH, sx + CW - 1, ACS_PLUS);
-            if (vis && room) {
-                attron(COLOR_PAIR(Color::Door) | A_BOLD);
-                if (room->north >= 0) mvaddch(sy,        sx + CW/2,     '^');
-                if (room->south >= 0) mvaddch(sy + CH,   sx + CW/2,     'v');
-                if (room->east  >= 0) mvaddch(sy + CH/2, sx + CW - 1,   '>');
-                if (room->west  >= 0) mvaddch(sy + CH/2, sx,            '<');
-                attroff(A_BOLD | COLOR_PAIR(Color::Door));
-            }
-            attroff(COLOR_PAIR(Color::UI));
-        }
-    }
-    attron(COLOR_PAIR(Color::UI));
-    mvprintw(startY + CH * 3 + 2, startX, "Presiona M para volver al juego");
-    attroff(COLOR_PAIR(Color::UI));
-    refresh();
-}
-
-// ─── drawUI ──────────────────────────────────────────────────────────────────
-
-void Renderer::drawUI(const Player& p, const EnemyPool& ep,
-                      const char* message, int roomId)
-{
+    if (!p || !ep) return;
     int cx = UI_ORIG_X;
     int cy = UI_ORIG_Y;
 
-    // ── Título ────────────────────────────────────────────────────────────────
     attron(COLOR_PAIR(Color::Item) | A_BOLD);
-    mvprintw(cy++, cx, "DUNGEON CRAWLER");
+    safe_mvprintw(cy++, cx, "DUNGEON CRAWLER");
     attroff(A_BOLD | COLOR_PAIR(Color::Item));
 
     attron(COLOR_PAIR(Color::UI));
-    mvprintw(cy++, cx, "Sala %d", roomId);
-    cy++;
+    safe_mvprintw(cy++, cx, "Sala %d", roomId);
+    ++cy;
 
-    // ── HP ────────────────────────────────────────────────────────────────────
-    mvprintw(cy, cx, "HP:");
-    for (int i = 0; i < p.maxHp; ++i) {
-        if (i < p.hp) {
+    safe_mvprintw(cy, cx, "HP:");
+    for (int i = 0; i < p->maxHp; ++i) {
+        if (i < p->hp) {
             attron(COLOR_PAIR(Color::Enemy1) | A_BOLD);
-            mvaddch(cy, cx + 4 + i, '*');
+            safe_mvaddch(cy, cx + 4 + i, '*');
             attroff(COLOR_PAIR(Color::Enemy1) | A_BOLD);
         } else {
             attron(COLOR_PAIR(Color::UI) | A_DIM);
-            mvaddch(cy, cx + 4 + i, '-');
+            safe_mvaddch(cy, cx + 4 + i, '-');
             attroff(COLOR_PAIR(Color::UI) | A_DIM);
         }
     }
-    ++cy; ++cy;
+    cy += 2;
 
-    // ── Item ──────────────────────────────────────────────────────────────────
     attron(COLOR_PAIR(Color::Item) | A_BOLD);
-    const char* const itemName = p.heldItem ? p.heldItem->name() : "[nada]";
-    mvprintw(cy++, cx, "Inv: %s", itemName);
+    safe_mvprintw(cy++, cx, "Inv: %s", p->heldItem ? p->heldItem->name() : "[nada]");
     attroff(A_BOLD | COLOR_PAIR(Color::Item));
     ++cy;
 
-    // ── Mensaje ───────────────────────────────────────────────────────────────
     attron(COLOR_PAIR(Color::Item));
-    mvprintw(cy++, cx, "%-22.22s", message ? message : "");
+    safe_mvprintw(cy++, cx, "%-22.22s", message ? message : "");
     attroff(COLOR_PAIR(Color::Item));
     ++cy;
 
-    // ── Panel COMBATE ─────────────────────────────────────────────────────────
     attron(COLOR_PAIR(Color::Enemy1) | A_BOLD);
-    mvprintw(cy++, cx, "COMBATE:");
+    safe_mvprintw(cy++, cx, "COMBATE:");
     attroff(A_BOLD | COLOR_PAIR(Color::Enemy1));
     attron(COLOR_PAIR(Color::UI));
-    mvprintw(cy++, cx, " Empuja a un enemigo");
-    mvprintw(cy++, cx, " para atacarlo");
+    safe_mvprintw(cy++, cx, " Empuja a un enemigo");
+    safe_mvprintw(cy++, cx, " para atacarlo");
     attron(A_DIM);
-    mvprintw(cy++, cx, " Espada = x2 dano");
-    mvprintw(cy++, cx, " Jefe suelta la LLAVE");
+    safe_mvprintw(cy++, cx, " Espada = x2 dano");
+    safe_mvprintw(cy++, cx, " Jefe suelta la LLAVE");
     attroff(A_DIM | COLOR_PAIR(Color::UI));
     ++cy;
 
-    // ── Controles ─────────────────────────────────────────────────────────────
     attron(COLOR_PAIR(Color::UI) | A_BOLD);
-    mvprintw(cy++, cx, "Controles:");
+    safe_mvprintw(cy++, cx, "Controles:");
     attroff(A_BOLD);
-    mvprintw(cy++, cx, " WASD/flechas mover");
-    mvprintw(cy++, cx, " F/Espacio    recoger");
-    mvprintw(cy++, cx, " M            mapa");
-    mvprintw(cy++, cx, " Q            salir");
+    safe_mvprintw(cy++, cx, " WASD/flechas mover");
+    safe_mvprintw(cy++, cx, " F/Espacio    recoger");
+    safe_mvprintw(cy++, cx, " M            mapa");
+    safe_mvprintw(cy++, cx, " Q            salir");
     ++cy;
 
-    // ── Leyenda ───────────────────────────────────────────────────────────────
     attron(A_BOLD);
-    mvprintw(cy++, cx, "Leyenda:");
+    safe_mvprintw(cy++, cx, "Leyenda:");
     attroff(A_BOLD);
 
     struct Legend { int cp; char ch; const char* desc; };
@@ -339,83 +278,254 @@ void Renderer::drawUI(const Player& p, const EnemyPool& ep,
         { Color::Boss,   'B', " Jefe (llave!)"   },
     };
     for (const Legend* l = legend; l != legend + 4; ++l) {
+        if (cy >= termRows) break;
         attron(COLOR_PAIR(l->cp) | A_BOLD);
-        mvprintw(cy, cx, " %c", l->ch);
+        safe_mvprintw(cy, cx, " %c", l->ch);
         attroff(COLOR_PAIR(l->cp) | A_BOLD);
         attron(COLOR_PAIR(Color::UI));
-        mvprintw(cy++, cx + 2, "%s", l->desc);
+        safe_mvprintw(cy++, cx + 2, "%s", l->desc);
         attroff(COLOR_PAIR(Color::UI));
     }
     ++cy;
 
-    // ── Enemigos en esta sala ─────────────────────────────────────────────────
     bool header = false;
-    const Enemy* const eend = ep.enemies + ep.count;
-    for (const Enemy* e = ep.enemies; e != eend; ++e) {
+    const Enemy* const eend = ep->enemies + ep->count;
+    for (const Enemy* e = ep->enemies; e != eend; ++e) {
         if (!e->active || e->roomId != roomId) continue;
+        if (cy >= termRows - 1) break;
         if (!header) {
             attron(COLOR_PAIR(Color::UI) | A_BOLD);
-            mvprintw(cy++, cx, "Enemigos:");
+            safe_mvprintw(cy++, cx, "Enemigos:");
             attroff(A_BOLD | COLOR_PAIR(Color::UI));
             header = true;
         }
+        if (cy >= termRows - 1) break;
         const int cp = (e->type == EnemyType::Boss)   ? Color::Boss
                      : (e->type == EnemyType::Patrol) ? Color::Enemy2
-                                                       : Color::Enemy1;
+                                                      : Color::Enemy1;
         attron(COLOR_PAIR(cp) | A_BOLD);
-        mvprintw(cy, cx, " %c", e->glyph());
+        safe_mvprintw(cy, cx, " %c", e->glyph());
         attroff(COLOR_PAIR(cp) | A_BOLD);
         attron(COLOR_PAIR(Color::UI));
-        // HP bar inline
-        mvprintw(cy, cx + 2, " ");
+        safe_mvprintw(cy, cx + 2, " ");
         for (int h = 0; h < e->maxHp; ++h) {
+            const int bx = cx + 3 + h;
+            if (bx >= termCols) break;
             if (h < e->hp) {
                 attron(COLOR_PAIR(Color::Enemy1));
-                mvaddch(cy, cx + 3 + h, '*');
+                safe_mvaddch(cy, bx, '*');
                 attroff(COLOR_PAIR(Color::Enemy1));
             } else {
                 attron(COLOR_PAIR(Color::UI) | A_DIM);
-                mvaddch(cy, cx + 3 + h, '-');
+                safe_mvaddch(cy, bx, '-');
                 attroff(COLOR_PAIR(Color::UI) | A_DIM);
             }
         }
         attron(COLOR_PAIR(Color::UI));
-        mvprintw(cy++, cx + 3 + e->maxHp + 1, "%s", e->name());
+        safe_mvprintw(cy++, cx + 3 + e->maxHp + 1, "%s", e->name());
         attroff(COLOR_PAIR(Color::UI));
     }
 }
 
-// ─── draw ────────────────────────────────────────────────────────────────────
-
-void Renderer::draw(const World& world, const Player& player,
-                    const EnemyPool& enemies, const ItemPool& items,
-                    const char* message, const bool visited[MAX_ROOMS])
+void Renderer::draw(const World*     const world,
+                     const Player*   const player,
+                     const EnemyPool* const enemies,
+                     const ItemPool*  const items,
+                     const char* message,
+                     const bool visited[MAX_ROOMS])
 {
+    getmaxyx(stdscr, termRows, termCols);
     clear();
-    drawRoom(world, player.roomId);
-    drawEntities(player, enemies, items, player.roomId);
-    drawUI(player, enemies, message, player.roomId);
+    if (!world || !player || !enemies || !items) { refresh(); return; }
+
+    const Room* const room = world->roomById(player->roomId);
+    drawRoom(room);
+    drawEntities(player, enemies, items, player->roomId);
+    drawUI(player, enemies, message, player->roomId);
     drawMiniMap(world, player, visited);
     refresh();
 }
 
-// ─── drawGameOver ────────────────────────────────────────────────────────────
-
-void Renderer::drawGameOver(bool won) {
+void Renderer::drawFullMap(const World*  const world,
+                            const Player* const player,
+                            const bool visited[MAX_ROOMS])
+{
+    if (!world || !player) return;
     clear();
-    const int cy = termRows / 2 - 2;
-    const int cx = termCols / 2 - 13;
-    attron(COLOR_PAIR(won ? Color::Item : Color::Enemy1) | A_BOLD);
-    if (won) {
-        mvprintw(cy,     cx, "  *** ESCAPASTE DEL DUNGEON! ***");
-        mvprintw(cy + 1, cx, "     El Jefe fue derrotado.    ");
-    } else {
-        mvprintw(cy,     cx, "  *** HAS MUERTO... ***        ");
-        mvprintw(cy + 1, cx, "  El dungeon te reclamo.       ");
+    constexpr int CW = 10, CH = 4;
+    const int startX = (termCols - CW * 3 - 1) / 2;
+    const int startY = (termRows - (CH * 3 + 1)) / 2;
+
+    attron(COLOR_PAIR(Color::Item) | A_BOLD);
+    safe_mvprintw(startY - 2, startX, "=== MAPA DEL DUNGEON (M para cerrar) ===");
+    attroff(A_BOLD | COLOR_PAIR(Color::Item));
+
+    for (int row = 0; row < 3; ++row) {
+        for (int col = 0; col < 3; ++col) {
+            const int roomId = row * 3 + col;
+            const int sx = startX + col * CW;
+            const int sy = startY + row * CH;
+            const int cp = (roomId == player->roomId) ? Color::MiniCur
+                         : visited[roomId]             ? Color::MiniVisit
+                                                       : Color::MiniHide;
+            const Room* const room = world->roomById(roomId);
+            const bool vis = visited[roomId] || roomId == player->roomId;
+
+            for (int dy = 0; dy < CH; ++dy) {
+                attron(COLOR_PAIR(cp));
+                for (int dx = 0; dx < CW - 1; ++dx) {
+                    char ch = ' ';
+                    if (vis) {
+                        if (dy == 0 || dy == CH-1 || dx == 0 || dx == CW-2) ch = '.';
+                        if (dy == CH/2) {
+                            if      (dx == CW/2 - 1 && roomId == player->roomId) ch = '@';
+                            else if (dx == CW/2 - 1 && room && room->hasExit)   ch = 'X';
+                            else if (dx == CW/2 - 1 && room && room->locked)    ch = '+';
+                            if (dx == CW/2) ch = static_cast<char>('0' + roomId);
+                        }
+                    } else {
+                        ch = (dy % 2 == 0 && dx % 2 == 0) ? '?' : ' ';
+                    }
+                    safe_mvaddch(sy + dy, sx + dx, ch);
+                }
+                attroff(COLOR_PAIR(cp));
+                attron(COLOR_PAIR(Color::UI));
+                safe_mvaddch(sy + dy, sx + CW - 1, ACS_VLINE);
+                attroff(COLOR_PAIR(Color::UI));
+            }
+            attron(COLOR_PAIR(Color::UI));
+            for (int dx = 0; dx < CW - 1; ++dx)
+                safe_mvaddch(sy + CH, sx + dx, ACS_HLINE);
+            safe_mvaddch(sy + CH, sx + CW - 1, ACS_PLUS);
+            if (vis && room) {
+                attron(COLOR_PAIR(Color::Door) | A_BOLD);
+                if (room->north >= 0) safe_mvaddch(sy,        sx + CW/2,     '^');
+                if (room->south >= 0) safe_mvaddch(sy + CH,   sx + CW/2,     'v');
+                if (room->east  >= 0) safe_mvaddch(sy + CH/2, sx + CW - 1,   '>');
+                if (room->west  >= 0) safe_mvaddch(sy + CH/2, sx,            '<');
+                attroff(A_BOLD | COLOR_PAIR(Color::Door));
+            }
+            attroff(COLOR_PAIR(Color::UI));
+        }
     }
-    attroff(A_BOLD);
-    mvprintw(cy + 3, cx, "  Presiona cualquier tecla...");
+    attron(COLOR_PAIR(Color::UI));
+    safe_mvprintw(startY + CH * 3 + 2, startX, "Presiona M para volver al juego");
+    attroff(COLOR_PAIR(Color::UI));
     refresh();
+}
+
+void Renderer::drawGameOver(bool won,
+                             int  tickCount,
+                             int  playerHp,
+                             int  playerMaxHp,
+                             const bool visited[MAX_ROOMS])
+{
+    getmaxyx(stdscr, termRows, termCols);
+    clear();
     nodelay(stdscr, FALSE);
+
+    if (won) {
+        static const char* const art[] = {
+            "  ____   ____  _______  ______  ____   ____  _____   _____  ",
+            " |_  _| |_  _||_   __ \\|_   _ \\|_  _| |_  _||_   _| |_   _|",
+            "   \\ \\   / /    | |__) | | |_) | \\ \\   / /    | |     | |  ",
+            "    \\ \\ / /     |  ___/  |  __'.  \\ \\ / /     | |     | |  ",
+            "     \\ ' /     _| |_    _| |__) |  \\ ' /     _| |_   _| |_ ",
+            "      \\_/     |_____|  |_______/    \\_/     |_____| |_____|",
+        };
+        static constexpr int ART_LINES = 6;
+        const int artW  = 60;
+        const int cy0   = termRows / 2 - ART_LINES - 4;
+        const int cxArt = (termCols - artW) / 2;
+
+        attron(COLOR_PAIR(Color::Item) | A_BOLD);
+        for (int x = 2; x < termCols - 2; ++x)
+            safe_mvaddch(cy0 - 2, x, ACS_HLINE);
+        safe_mvaddch(cy0 - 2, 2,            ACS_ULCORNER);
+        safe_mvaddch(cy0 - 2, termCols - 3, ACS_URCORNER);
+        attroff(A_BOLD | COLOR_PAIR(Color::Item));
+
+        for (int i = 0; i < ART_LINES; ++i) {
+            attron(COLOR_PAIR(Color::Item) | A_BOLD);
+            safe_mvprintw(cy0 + i, cxArt, "%s", art[i]);
+            attroff(A_BOLD | COLOR_PAIR(Color::Item));
+        }
+
+        const int subY = cy0 + ART_LINES + 1;
+        attron(COLOR_PAIR(Color::Door) | A_BOLD);
+        safe_mvprintw(subY, (termCols - 36) / 2,
+                      "** El Jefe Oscuro ha sido derrotado! **");
+        attroff(A_BOLD | COLOR_PAIR(Color::Door));
+
+        attron(COLOR_PAIR(Color::UI));
+        for (int x = (termCols / 2) - 20; x <= (termCols / 2) + 20; ++x)
+            safe_mvaddch(subY + 2, x, ACS_HLINE);
+        attroff(COLOR_PAIR(Color::UI));
+
+        const int stY = subY + 3;
+        const int stX = (termCols - 38) / 2;
+
+        attron(COLOR_PAIR(Color::UI) | A_BOLD);
+        safe_mvprintw(stY, stX, "Turnos totales  : ");
+        attroff(A_BOLD | COLOR_PAIR(Color::UI));
+        attron(COLOR_PAIR(Color::Item));
+        safe_mvprintw(stY, stX + 18, "%d", tickCount);
+        attroff(COLOR_PAIR(Color::Item));
+
+        attron(COLOR_PAIR(Color::UI) | A_BOLD);
+        safe_mvprintw(stY + 1, stX, "Vida restante   : ");
+        attroff(A_BOLD | COLOR_PAIR(Color::UI));
+        for (int i = 0; i < playerMaxHp; ++i) {
+            const int bx = stX + 18 + i;
+            if (i < playerHp) {
+                attron(COLOR_PAIR(Color::Enemy1) | A_BOLD);
+                safe_mvaddch(stY + 1, bx, '*');
+                attroff(COLOR_PAIR(Color::Enemy1) | A_BOLD);
+            } else {
+                attron(COLOR_PAIR(Color::UI) | A_DIM);
+                safe_mvaddch(stY + 1, bx, '-');
+                attroff(COLOR_PAIR(Color::UI) | A_DIM);
+            }
+        }
+        safe_mvprintw(stY + 1, stX + 18 + playerMaxHp + 1,
+                      "(%d/%d)", playerHp, playerMaxHp);
+
+        int exploredCount = 0;
+        for (int i = 0; i < MAX_ROOMS; ++i)
+            if (visited[i]) ++exploredCount;
+        const int pct = (exploredCount * 100) / MAX_ROOMS;
+        attron(COLOR_PAIR(Color::UI) | A_BOLD);
+        safe_mvprintw(stY + 2, stX, "Salas exploradas: ");
+        attroff(A_BOLD | COLOR_PAIR(Color::UI));
+        attron(COLOR_PAIR(Color::Door));
+        safe_mvprintw(stY + 2, stX + 18, "%d/%d  (%d%%)",
+                      exploredCount, MAX_ROOMS, pct);
+        attroff(COLOR_PAIR(Color::Door));
+
+        attron(COLOR_PAIR(Color::Item) | A_BOLD);
+        for (int x = 2; x < termCols - 2; ++x)
+            safe_mvaddch(stY + 4, x, ACS_HLINE);
+        safe_mvaddch(stY + 4, 2,            ACS_LLCORNER);
+        safe_mvaddch(stY + 4, termCols - 3, ACS_LRCORNER);
+        attroff(A_BOLD | COLOR_PAIR(Color::Item));
+
+        attron(COLOR_PAIR(Color::UI));
+        safe_mvprintw(stY + 6, (termCols - 30) / 2,
+                      "  Presiona cualquier tecla...  ");
+        attroff(COLOR_PAIR(Color::UI));
+
+    } else {
+        const int cy = termRows / 2 - 2;
+        const int cx = (termCols - 32) / 2;
+        attron(COLOR_PAIR(Color::Enemy1) | A_BOLD);
+        safe_mvprintw(cy,     cx, "  *** HAS MUERTO... ***        ");
+        safe_mvprintw(cy + 1, cx, "  El dungeon te reclamo.       ");
+        attroff(A_BOLD | COLOR_PAIR(Color::Enemy1));
+        attron(COLOR_PAIR(Color::UI));
+        safe_mvprintw(cy + 3, cx, "  Presiona cualquier tecla...");
+        attroff(COLOR_PAIR(Color::UI));
+    }
+
+    refresh();
     getch();
 }

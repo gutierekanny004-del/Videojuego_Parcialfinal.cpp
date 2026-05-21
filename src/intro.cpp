@@ -34,8 +34,6 @@ static void drawBorder() {
     mvaddch(rows - 1, cols - 1, ACS_LRCORNER);
 }
 
-// ─── Pagina 1: Historia ───────────────────────────────────────────────────────
-
 static void pageStory() {
     clear();
     drawBorder();
@@ -60,8 +58,6 @@ static void pageStory() {
     do { k = getch(); } while (k != '\n' && k != KEY_ENTER && k != ' ');
 }
 
-// ─── Pagina 2: Controles y mecanicas ─────────────────────────────────────────
-
 static void pageControls() {
     clear();
     drawBorder();
@@ -77,19 +73,22 @@ static void pageControls() {
     attron(A_BOLD); mvprintw(r++, cx, "Combate:"); attroff(A_BOLD);
     mvprintw(r++, cx, "  Muevete HACIA un enemigo para atacarlo");
     attron(COLOR_PAIR(4)); mvprintw(r, cx, "  C"); attroff(COLOR_PAIR(4));
-    mvprintw(r++, cx + 3, " = Chaser  (2 HP)  se acerca rapido");
+    mvprintw(r++, cx + 3, " = Cazador  (2 HP)  se acerca rapido");
     attron(COLOR_PAIR(5)); mvprintw(r, cx, "  P"); attroff(COLOR_PAIR(5));
-    mvprintw(r++, cx + 3, " = Patrol  (3 HP)  ronda y ataca");
-    mvprintw(r++, cx, "  Espada en mano: haces 2 de dano en vez de 1");
+    mvprintw(r++, cx + 3, " = Centinela (3 HP)  ronda y ataca");
+    attron(COLOR_PAIR(18 % 8 + 1)); mvprintw(r, cx, "  B"); attroff(COLOR_PAIR(18 % 8 + 1));
+    mvprintw(r++, cx + 3, " = Jefe     (6 HP)  suelta la llave");
+    mvprintw(r++, cx, "  Con espada: haces 2 de dano en vez de 1");
     r++;
 
     attron(A_BOLD); mvprintw(r++, cx, "Trampas y puzzles:"); attroff(A_BOLD);
     attron(COLOR_PAIR(4)); mvprintw(r, cx, "  ^"); attroff(COLOR_PAIR(4));
     mvprintw(r++, cx + 3, " = trampa de puas   (-1 HP al pisar)");
     attron(COLOR_PAIR(6)); mvprintw(r, cx, "  o"); attroff(COLOR_PAIR(6));
-    mvprintw(r++, cx + 3, " = placa de presion (pisala para abrir una puerta)");
+    mvprintw(r++, cx + 3, " = placa de presion (pisala para abrir puertas)");
     attron(COLOR_PAIR(8)); mvprintw(r, cx, "  #"); attroff(COLOR_PAIR(8));
-    mvprintw(r++, cx + 3, " = puerta secreta   (se abre con la placa correcta)");
+    mvprintw(r++, cx + 3, " = puerta secreta   (necesita la placa correcta)");
+    mvprintw(r++, cx, "  Algunas puertas requieren pisar 2 placas en salas distintas");
     r++;
 
     attron(A_BOLD); mvprintw(r++, cx, "Otros:"); attroff(A_BOLD);
@@ -99,9 +98,9 @@ static void pageControls() {
     r++;
 
     attron(A_BOLD); mvprintw(r++, cx, "Objetivo:"); attroff(A_BOLD);
-    mvprintw(r++, cx, "  1. Explora el dungeon (9 salas)");
-    mvprintw(r++, cx, "  2. Resuelve el puzzle para conseguir la LLAVE");
-    mvprintw(r++, cx, "  3. Abre la Camara Sellada y pisa la X para ganar");
+    mvprintw(r++, cx, "  1. Pisa las 2 placas (salas 5 y 7) para abrir la arena del Jefe");
+    mvprintw(r++, cx, "  2. Derrota al Jefe y recoge la LLAVE");
+    mvprintw(r++, cx, "  3. Ve a la Camara Sellada y pisa la X para ganar");
     r += 2;
 
     centered(r, "[ ENTER: entrar al dungeon ]", COLOR_PAIR(3) | A_BOLD);
@@ -109,8 +108,6 @@ static void pageControls() {
     int k;
     do { k = getch(); } while (k != '\n' && k != KEY_ENTER && k != ' ');
 }
-
-// ─── showIntro ────────────────────────────────────────────────────────────────
 
 bool showIntro() {
     initscr();
